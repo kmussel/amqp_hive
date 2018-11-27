@@ -51,7 +51,6 @@ defmodule AmqpHiveClient.Consumer do
     {:noreply, state}
   end
 
-
   def handle_cast({:channel_available, chan}, {consumer, channel, attrs} = state) do
     Process.monitor(chan.pid)
 
@@ -88,19 +87,16 @@ defmodule AmqpHiveClient.Consumer do
       nil -> 
         {:stop, :normal, state}
       chan -> 
-        # res = AMQP.Basic.cancel(chan, tag)
         if Process.alive?(chan.pid) do      
           case Map.get(consumer, :queue) do
             nil -> nil
             queue -> 
                GenServer.cast(AmqpHiveClient.QueueHandler, {:delete_queue, chan, queue})
-                # AMQP.Queue.delete(chan, queue, [])
           end
         end
         {:noreply, state}
         # {:stop, :normal, state}
     end
-    # Process.exit(self(), :normal)
   end
 
   def handle_cast(other, state) do
@@ -126,7 +122,6 @@ defmodule AmqpHiveClient.Consumer do
       res = AmqpHiveClient.Connection.request_channel(connection_name, self())
       # Process.send_after(self(), :ensure_channel, 5_000)
     end
-    # Logger.debug(fn -> "[CONSUMER] basic consume #{inspect(consumer_tag)}" end)
     {:noreply, state}
   end
 
@@ -151,11 +146,18 @@ defmodule AmqpHiveClient.Consumer do
     {:stop, :normal, state}
   end
 
+  # Receives and processes message from queue
   def handle_info({:basic_deliver, payload, meta}, {consumer, chan, other} = state) do
     pid = self()
-    # Logger.debug(fn -> "Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
-    
-    spawn(fn -> consume(pid, chan, payload, meta, state) end)
+    Logger.info(fn -> "Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
+
+    module =
+      case Application.get_env(:amqp_hive, :consumer_handler) do
+        nil -> AmqpHiveClient.Handlers.Consumer
+        ro -> ro
+      end
+
+    spawn(fn -> apply(module, :consume, [pid, chan, payload, meta, state]) end)
     {:noreply, state}
   end
 
@@ -187,25 +189,6 @@ defmodule AmqpHiveClient.Consumer do
     Logger.debug(fn -> "HANDLE kill channel state = #{inspect(state)}" end)
     # AMQP.Channel.close(channel)
     {:noreply, state}
-  end
-
-  def handle_info(:finished, {consumer, channel, %{consumer_tag: tag}} = state) do
-    # Logger.debug(fn -> "HANDLE Finished Queue = #{inspect(state)}" end)
-    case channel do
-      nil -> 
-        {:stop, :normal, state}
-      chan -> 
-        if Process.alive?(chan.pid) do      
-          case Map.get(consumer, :queue) do
-            nil -> nil
-            queue -> 
-              GenServer.cast(AmqpHiveClient.QueueHandler, {:delete_queue, chan, queue})
-                # AMQP.Queue.delete(chan, queue, [])
-          end
-        end
-        {:noreply, state}
-        # {:stop, :normal, state}
-    end
   end
 
   def handle_info(:finished, {consumer, channel, attrs} = state) do
@@ -240,74 +223,6 @@ defmodule AmqpHiveClient.Consumer do
     GenServer.cast(pid, {:channel_available, chan})
   end
 
-  defp consume(pid, channel, payload, meta, state) do
-    # Logger.info(fn -> "Consumer Meta is #{inspect(meta)}" end)
-
-    response = 
-      case handle_route(pid, payload, meta, state) do
-        %{"error" => msg} ->
-          :ok = Basic.reject channel, meta.delivery_tag, requeue: not meta.redelivered
-          %{"error" => msg}
-        response ->  
-          AMQP.Basic.ack(channel, meta.delivery_tag)
-          response 
-      end
-    
-    case meta.reply_to do
-      r when is_nil(r) or r == :undefined ->
-        nil
-
-      reply_to ->
-        AMQP.Basic.publish(
-          channel,
-          "",
-          meta.reply_to,
-          "#{Poison.encode!(response)}",
-          correlation_id: meta.correlation_id
-        )
-    end
-  rescue
-    # Requeue unless it's a redelivered message.
-    # This means we will retry consuming a message once in case of exception
-    # before we give up and have it moved to the error queue
-    #
-    # You might also want to catch :exit signal in production code.
-    # Make sure you call ack, nack or reject otherwise comsumer will stop
-    # receiving messages.
-    exception ->      
-      Logger.error(fn -> "Error consume #{inspect(exception)}" end)
-      :ok = Basic.reject channel, meta.delivery_tag, requeue: not meta.redelivered
-      Logger.error(fn -> "Error consuming payload: #{payload}" end)
-  end
-
-  def handle_route(pid, payload, %{routing_key: "rpc.create_deployment"} = meta, {_consumer, _other, %{parent: connection_name}}) do
-    context = Poison.decode!(payload)
-    case Map.get(context, "deployment_id") do
-      nil ->  %{"error" => "No Deployment ID" }
-      dep_id -> 
-        name = "#{connection_name}-#{dep_id}"
-        consumer = %{name: dep_id, queue: dep_id}
-
-        AmqpHive.ConsumerRegistry.register_consumer(name, consumer, connection_name)
-        %{"success" =>  "Waiting for Deployment "}
-    end    
-  rescue 
-    exception -> 
-      Logger.error(fn -> "Error handle_route rpc.create_deployment #{inspect(exception)}" end)
-      %{"error" => "Error Creating Addons for #{payload}"}
-  end
-
-  
-
-  def handle_route(pid, payload, meta, state) do
-    # Logger.info("handle route #{inspect(state)}")    
-    body = Poison.decode!(payload)
-    handle_action(pid, body, meta, state)
-  rescue 
-    exception -> 
-      Logger.error(fn -> "Error converting #{payload} to json" end)
-      %{"error" => "Error converting #{payload} to json"}
-  end
 
   def handle_action(pid, %{"action" => "finished"} = payload, meta, state) do    
     # Logger.info("Handle finish action #{inspect(pid)}")
@@ -326,6 +241,3 @@ defmodule AmqpHiveClient.Consumer do
     %{"error" => "No Action Handler"}
   end
 end
-
-
-# send(Swarm.whereis_name("dev_connection-11111111-58b5-4318-8063-7f425bf902f6"), :finished)

@@ -1,10 +1,10 @@
 use Mix.Config
 
 config :logger, 
-  level: :info
+  level: :debug
 
 config :libcluster,
-  debug: false,
+  debug: true,
   topologies: [
     amqp_hive: [
       strategy: Cluster.Strategy.Epmd,

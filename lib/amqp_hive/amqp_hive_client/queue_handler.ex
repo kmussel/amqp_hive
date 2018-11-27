@@ -17,6 +17,10 @@ defmodule AmqpHiveClient.QueueHandler do
     def init() do
       {:ok, {}}
     end
+    
+    def init(args) do
+      {:ok, args}
+    end
   
     def handle_cast({:delete_queue, chan, queue}, state) do
     #   Logger.info(fn -> "Deleteing Queue #{queue}" end)

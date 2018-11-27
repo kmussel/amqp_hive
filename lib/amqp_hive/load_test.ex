@@ -4,7 +4,8 @@ defmodule AmqpHive.LoadTest do
   
     @start_delay Application.get_env(:hive, :start_delay, 10_000)
 
-    @num_queues 10_000
+    @name __MODULE__
+    @num_queues 10 #_000
   
     def start_link do
       GenServer.start_link(__MODULE__, [], name: __MODULE__)
@@ -22,11 +23,14 @@ defmodule AmqpHive.LoadTest do
       {:ok, {[], 0}}
     end
 
+    def kill_queues() do
+      send(Process.whereis(@name), :kill_queues)
+    end
     def handle_info(:start, {queues, _} = state) do
       allqueues = 
         for i <- 0..@num_queues, i > 0 do
             uuid = UUID.uuid4()        
-            AmqpHiveClient.Producer.publish("dev_connection", "rpc.create_deployment", %{"deployment_id" => uuid, "msg" => "hello there"}, %{"exchange" => "amq.topic"})
+            AmqpHiveClient.Producer.publish("dev_connection", "rpc.create_deployment", %{"deployment_id" => uuid, "msg" => "hello there"}, [exchange: "amq.topic"])
             uuid
         end
 

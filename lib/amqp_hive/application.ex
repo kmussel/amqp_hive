@@ -12,6 +12,7 @@ defmodule AmqpHive.Application do
       children = [
         {Cluster.Supervisor, [topologies, [name: AmqpHive.ClusterSupervisor]]},
         AmqpHive.ConsumerRegistry.child_spec(),
+        AmqpHive.RpcRegistry.child_spec(),
         AmqpHiveClient.QueueHandler.child_spec(),
         AmqpHiveClient.ConnectionSupervisor.child_spec(connections),
         AmqpHiveClient.ConnectionManager.child_spec(connections)

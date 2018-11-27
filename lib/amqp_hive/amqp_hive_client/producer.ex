@@ -21,12 +21,13 @@ defmodule AmqpHiveClient.Producer do
   end
 
   def handle_call({:publish, route, payload, options}, _from, {producer, channel, _conn_name} = state) do
-    exchange_name = Map.get(options, "exchange", "")
+    exchange_name = Keyword.get(options, :exchange, "")
     pub = AMQP.Basic.publish(
           channel,
           exchange_name,
           route,
-          "#{Poison.encode!(payload)}"
+          "#{Poison.encode!(payload)}",
+          options
         )
     {:reply, pub, state}
   end
@@ -68,13 +69,6 @@ defmodule AmqpHiveClient.Producer do
         {producer, _chan, %{parent: connection_name} = options} = state
       ) do
     Logger.debug(fn -> "Handle Stop Consumer CAST: #{inspect(reason)}" end)
-    
-
-    # res =
-    #   GenServer.cast(
-    #     AmqpHiveClient.ConnectionManager,
-    #     {:remove_consumer, producer, connection_name}
-    #   )
 
     {:noreply, state}
   end
@@ -126,8 +120,6 @@ defmodule AmqpHiveClient.Producer do
   def handle_info({:basic_deliver, payload, meta}, {consumer, chan, other} = state) do
     pid = self()
     Logger.debug(fn -> "[PRODUCER] Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
-    
-    # spawn(fn -> consume(pid, chan, payload, meta, state) end)
     {:noreply, state}
   end
 
@@ -173,7 +165,6 @@ defmodule AmqpHiveClient.Producer do
     {:noreply, state}
   end
 
-
   def terminate(other, {_consumer, channel, _options} = state) do
     Logger.debug(fn -> "[PRODUCER TERMINATE] other = #{inspect(other)} and stuff = #{inspect(state)}" end)
     AMQP.Channel.close(channel)
@@ -184,26 +175,12 @@ defmodule AmqpHiveClient.Producer do
     GenServer.cast(pid, {:channel_available, chan})
   end
   
-  def publish(connection_name, route, payload, options \\ %{}) do
+  def publish(connection_name, route, payload, options \\ []) do
     {:ok, pid} = AmqpHiveClient.ProducerSupervisor.get_available_producer(connection_name)
     res = GenServer.call(pid, {:publish, route, payload, options}, 30_000)
-
     res
   rescue
-    # Requeue unless it's a redelivered message.
-    # This means we will retry consuming a message once in case of exception
-    # before we give up and have it moved to the error queue
-    #
-    # You might also want to catch :exit signal in production code.
-    # Make sure you call ack, nack or reject otherwise comsumer will stop
-    # receiving messages.
     exception ->      
-      Logger.error(fn -> "Error publishing payload: #{payload}" end)
-      Logger.error(fn -> "Error publishing  #{inspect(exception)}" end)
-      # :ok = Basic.reject channel, meta.delivery_tag, requeue: not meta.redelivered
-      
+      Logger.error(fn -> "Error publishing: #{inspect(exception)} : payload: #{payload}" end)
   end
 end
-
-
-# send(Swarm.whereis_name("dev_connection-11111111-58b5-4318-8063-7f425bf902f6"), :finished)

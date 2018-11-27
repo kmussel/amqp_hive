@@ -1,9 +1,9 @@
-defmodule AmqpHive.ConsumerRegistry do
+defmodule AmqpHive.RpcRegistry do
   use GenServer
   require Logger
 
   @name __MODULE__
-  @swarm_group :amqp_hive_consumers
+  @swarm_group :amqp_hive_tasks
 
 
   def child_spec() do
@@ -21,12 +21,12 @@ defmodule AmqpHive.ConsumerRegistry do
     GenServer.call(@name, {:register, name})
   end
 
-  def register_consumer(name, consumer, connection_name) do
-    GenServer.call(@name, {:register_consumer, name, consumer, connection_name})
+  def register_task(name, task_args) do
+    GenServer.call(@name, {:register_task, name, task_args})
   end
 
-  def monitor(pid, {consumer_name, consumer, conn_name}) do
-    GenServer.cast(@name, {:monitor, pid, {consumer_name, consumer, conn_name}})
+  def monitor(pid, {task_name, task_args}) do
+    GenServer.cast(@name, {:monitor, pid, {task_name, task_args}})
   end
 
   def log_state() do
@@ -35,18 +35,17 @@ defmodule AmqpHive.ConsumerRegistry do
 
   def init(_) do
     Process.send_after(self(), :log_state, 25000)
-    Process.send_after(self(), :handle_startup, 10000)
     Process.flag(:trap_exit, true)
     {:ok, %{}}
   end
 
-  def handle_cast({:monitor, pid, consumer}, state) do
+  def handle_cast({:monitor, pid, task_args}, state) do
     ref = Process.monitor(pid)
-    {:noreply, Map.put(state, ref, consumer)}
+    {:noreply, Map.put(state, ref, task_args)}
   end
 
-  def handle_call({:register_consumer, name, consumer, connection_name}, _from, state) do
-    case start_consumer_via_swarm(name, consumer, connection_name) do
+  def handle_call({:register_task, name, task_args}, _from, state) do
+    case start_consumer_via_swarm(name, task_args) do
       {:ok, pid} ->        
         {:reply, {:ok, pid}, state}
       {:already_registered, pid} ->
@@ -57,22 +56,12 @@ defmodule AmqpHive.ConsumerRegistry do
     end
   end
 
-  def handle_info(:handle_startup, state) do
-    module =
-      case Application.get_env(:amqp_hive, :registry_handler) do
-        nil -> AmqpHiveClient.Handlers.Registry
-        ro -> ro
-      end
-
-    apply(module, :handle_startup, [])
-    {:noreply, state}
-  end
 
   def handle_info(:log_state, state) do
     total = Swarm.registered() |> Enum.count()
     local = state |>  Enum.count()
 
-    Logger.info("[Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
+    Logger.info("[Task Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
     Process.send_after(self(), :log_state, 15000)
     {:noreply, state}
   end
@@ -80,7 +69,7 @@ defmodule AmqpHive.ConsumerRegistry do
   def handle_info({:DOWN, ref, :process, _pid, :normal}, state) do
     # Logger.debug("[Registry] DOWN NORMAL #{inspect(Map.get(state, ref))}")
     case Map.get(state, ref) do
-      {name, consumer, conn_name} ->
+      {name, task_args} ->
         Swarm.unregister_name(name)
       other -> nil
     end
@@ -92,19 +81,19 @@ defmodule AmqpHive.ConsumerRegistry do
     case Map.get(state, ref) do
       nil ->
         {:noreply, state}
-      {name, consumer, conn_name} ->
+      {name, task_args} ->
         Swarm.unregister_name(name)
-        {:ok, _pid} = start_consumer_via_swarm(name, consumer, conn_name, "restarting")
+        {:ok, _pid} = start_consumer_via_swarm(name, task_args, "restarting")
         {:noreply, Map.delete(state, ref)}
       other -> 
         Logger.debug("[Registry] :DOWN #{inspect(other)}")
-          {:noreply, Map.delete(state, ref)}
+        {:noreply, Map.delete(state, ref)}
     end
   end
 
-  def start_consumer_via_swarm(name, consumer, connection_name, reason \\ "starting") do
+  def start_consumer_via_swarm(name, task_args, reason \\ "starting") do
     with :undefined <- Swarm.whereis_name(name),
-         {:ok, pid} <- Swarm.register_name(name, AmqpHiveClient.ConnectionManager, :register_consumer, [name, consumer, connection_name]) do
+         {:ok, pid} <- Swarm.register_name(name, AmqpHiveClient.Rpc, :register_task, [name, task_args]) do
           Swarm.join(@swarm_group, pid)
       {:ok, pid}
     else

@@ -37,7 +37,7 @@ defmodule AmqpHive.MixProject do
       {:swarm, "~> 3.0"},
       {:poison, "~> 3.1.0"},
       {:httpoison, "~> 1.0"},
-      {:amqp, "~> 1.0"},
+      {:amqp, git: "https://github.com/kmussel/amqp.git", tag: "v1.0.4"},
       {:elixir_uuid, "~> 1.2.0"}
     ]
   end
