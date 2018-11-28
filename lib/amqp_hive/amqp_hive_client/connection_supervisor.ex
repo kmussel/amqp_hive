@@ -21,7 +21,7 @@ defmodule AmqpHiveClient.ConnectionSupervisor do
     )
   end
 
-  def stop_connection(connection_name, name) when is_atom(name) do
+  def stop_connection(_connection_name, name) when is_atom(name) do
     case Process.whereis(name) do
       nil ->
         {:error, "No process"}
@@ -34,14 +34,14 @@ defmodule AmqpHiveClient.ConnectionSupervisor do
     end
   end
 
-  def stop_connection(name, pid) do
+  def stop_connection(_name, pid) do
     DynamicSupervisor.terminate_child(
       __MODULE__,
       pid
     )
   end
 
-  def init(conn) do
+  def init(_conn) do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 end

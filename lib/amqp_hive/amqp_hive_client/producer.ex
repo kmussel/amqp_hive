@@ -16,11 +16,11 @@ defmodule AmqpHiveClient.Producer do
   end
 
   def init({producer, connection_name}) do
-    res = AmqpHiveClient.Connection.request_channel(connection_name, self())
+    AmqpHiveClient.Connection.request_channel(connection_name, self())
     {:ok, {producer, nil, %{parent: connection_name}}}
   end
 
-  def handle_call({:publish, route, payload, options}, _from, {producer, channel, _conn_name} = state) do
+  def handle_call({:publish, route, payload, options}, _from, {_producer, channel, _conn_name} = state) do
     exchange_name = Keyword.get(options, :exchange, "")
     pub = AMQP.Basic.publish(
           channel,
@@ -42,7 +42,7 @@ defmodule AmqpHiveClient.Producer do
   # **NOTE**: This is called *after* the process is successfully started,
   # so make sure to design your processes around this caveat if you
   # wish to hand off state like this.
-  def handle_cast({:swarm, :end_handoff, delay}, state) do
+  def handle_cast({:swarm, :end_handoff, _delay}, state) do
     Logger.info("[PRODUCER SWARM] END HANDoff #{inspect(state)}")
     {:noreply, state}
   end
@@ -56,7 +56,7 @@ defmodule AmqpHiveClient.Producer do
     {:noreply, state}
   end
 
-  def handle_cast({:channel_available, chan}, {producer, channel, other} = state) do
+  def handle_cast({:channel_available, chan}, {producer, _channel, other} = _state) do
     Process.monitor(chan.pid)
 
         
@@ -66,14 +66,14 @@ defmodule AmqpHiveClient.Producer do
 
   def handle_cast(
         {:stop, reason},
-        {producer, _chan, %{parent: connection_name} = options} = state
+        {_producer, _chan, %{parent: _connection_name} = _options} = state
       ) do
     Logger.debug(fn -> "Handle Stop Consumer CAST: #{inspect(reason)}" end)
 
     {:noreply, state}
   end
 
-  def handle_cast(:finished, {consumer, channel, _} = state) do
+  def handle_cast(:finished, {_consumer, _channel, _} = state) do
     Logger.debug(fn -> "[PRODUCER] HANDLE Cast Finished Queue = #{inspect(state)}" end)    
     # AMQP.Channel.close(channel)
     # Process.exit(self(), :normal)
@@ -117,7 +117,7 @@ defmodule AmqpHiveClient.Producer do
     {:noreply, chan}
   end
 
-  def handle_info({:basic_deliver, payload, meta}, {consumer, chan, other} = state) do
+  def handle_info({:basic_deliver, payload, _meta}, {_consumer, _chan, _other} = state) do
     pid = self()
     Logger.debug(fn -> "[PRODUCER] Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
     {:noreply, state}
@@ -153,7 +153,7 @@ defmodule AmqpHiveClient.Producer do
     {:noreply, state}
   end
 
-  def handle_info(:finished, {consumer, channel, _} = state) do
+  def handle_info(:finished, {_consumer, channel, _} = state) do
     Logger.debug(fn -> "[PRODUCER] HANDLE Finished Queue = #{inspect(state)}" end)    
     AMQP.Channel.close(channel)
     Process.exit(self(), :normal)

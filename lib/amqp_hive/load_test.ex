@@ -26,7 +26,7 @@ defmodule AmqpHive.LoadTest do
     def kill_queues() do
       send(Process.whereis(@name), :kill_queues)
     end
-    def handle_info(:start, {queues, _} = state) do
+    def handle_info(:start, {_queues, _} = _state) do
       allqueues = 
         for i <- 0..@num_queues, i > 0 do
             uuid = UUID.uuid4()        
@@ -53,14 +53,13 @@ defmodule AmqpHive.LoadTest do
       {:noreply, state}
     end
 
-    def handle_cast(:message_received, {queues, cnt} = state) do
-
-        {:noreply, {queues, cnt + 1}}
-    end
-
     def handle_info(:message_cnt, {_queue, cnt} = state) do
         Logger.info("message cnt = #{cnt}")
         {:noreply, state}
+    end
+
+    def handle_cast(:message_received, {queues, cnt} = _state) do
+        {:noreply, {queues, cnt + 1}}
     end
 
     # def handle_info(:remove_all, state) do

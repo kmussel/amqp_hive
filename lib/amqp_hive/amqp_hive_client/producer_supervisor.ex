@@ -55,7 +55,7 @@ defmodule AmqpHiveClient.ProducerSupervisor do
     )
   end
 
-  def init({name}) do
+  def init({_name}) do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
@@ -67,7 +67,7 @@ defmodule AmqpHiveClient.ProducerSupervisor do
     children = DynamicSupervisor.which_children(supname)
     
     {bestpid, cnt} =
-      Enum.reduce(children, {nil, -1}, fn {_, pid, typ, module}, {bestpid, cnt} ->
+      Enum.reduce(children, {nil, -1}, fn {_, pid, _typ, _module}, {bestpid, cnt} ->
         process_info = Process.info(pid)        
         message_len = process_info[:message_queue_len]
         if message_len < cnt or is_nil(bestpid)  do

@@ -55,7 +55,7 @@ defmodule AmqpHiveClient.ConsumerSupervisor do
     )
   end
 
-  def init({name}) do
+  def init({_name}) do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
@@ -66,7 +66,7 @@ defmodule AmqpHiveClient.ConsumerSupervisor do
     children = DynamicSupervisor.which_children(supname)
     
     {bestpid, cnt} =
-      Enum.reduce(children, {nil, 0}, fn {_, pid, typ, module}, {bestpid, cnt} ->
+      Enum.reduce(children, {nil, 0}, fn {_, pid, _typ, _module}, {bestpid, cnt} ->
         process_info = Process.info(pid)
         # Logger.info("Process Info = #{inspect(process_info)}")
 

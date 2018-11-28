@@ -11,7 +11,7 @@ defmodule AmqpHiveClient.Handlers.Registry do
   def resubscribe_queues() do
     Logger.info("Resubscribe to queues")
     connections = Application.get_env(:amqp_hive, :connections, [])
-    Enum.reduce(connections, [], fn conn, acc ->
+    Enum.each(connections, fn conn ->
       conn_name = Map.get(conn, :name, "")
       connection = Map.get(conn, :connection, %{})
       
@@ -45,13 +45,13 @@ defmodule AmqpHiveClient.Handlers.Registry do
     end)
   end
 
-  def get_queues(%{host: host, virtual_host: vhost, username: username, password: password } = conn) do
+  def get_queues(%{host: host, virtual_host: vhost, username: username, password: password } = _conn) do
     headers = [
       {:"Content-Type", "application/json"},
       {:Authorization, "Basic #{basic_auth_cred(username, password)}"}
     ]
 
-    with {:ok, %HTTPoison.Response{body: body}} =
+    with {:ok, %HTTPoison.Response{body: body}} <-
       HTTPoison.get(
         "#{rabbitmq_api_queue_url(host, vhost)}",
         headers,

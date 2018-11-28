@@ -24,7 +24,7 @@ defmodule AmqpHiveClient.Handlers.Consumer do
         AMQP.Basic.publish(
           channel,
           "",
-          meta.reply_to,
+          reply_to,
           "#{Poison.encode!(response)}",
           correlation_id: meta.correlation_id
         )
@@ -43,7 +43,7 @@ defmodule AmqpHiveClient.Handlers.Consumer do
       Logger.error(fn -> "Error consuming payload: #{payload}" end)
   end
 
-  def handle_route(pid, payload, %{routing_key: "rpc.create_deployment"} = meta, {_consumer, _other, %{parent: connection_name}}) do
+  def handle_route(_pid, payload, %{routing_key: "rpc.create_deployment"} = _meta, {_consumer, _other, %{parent: connection_name}}) do
     context = Poison.decode!(payload)
     case Map.get(context, "deployment_id") do
       nil ->  %{"error" => "No Deployment ID" }
@@ -65,25 +65,23 @@ defmodule AmqpHiveClient.Handlers.Consumer do
     body = Poison.decode!(payload)
     handle_action(pid, body, meta, state)
   rescue 
-    exception -> 
+    _exception -> 
       Logger.error(fn -> "Error converting #{payload} to json" end)
       %{"error" => "Error converting #{payload} to json"}
   end
 
-  def handle_action(pid, %{"action" => "finished"} = payload, meta, state) do    
+  def handle_action(pid, %{"action" => "finished"} = _payload, _meta, _state) do    
     # Logger.info("Handle finish action #{inspect(pid)}")
     GenServer.cast(pid, :finished)
     %{"success" => "Finished"}
   end
 
-  def handle_action(pid, %{"action" => "log", "msg" => msg} = payload, meta, state) do    
+  def handle_action(_pid, %{"action" => "log", "msg" => _msg} = _payload, _meta, _state) do    
     # Logger.info("Handle LOG action #{inspect(msg)}")
-    # GenServer.cast(pid, :finished)
-    GenServer.cast(AmqpHive.LoadTest, :message_received)
     %{"success" => "Logged"}
   end
 
-  def handle_action(pid, payload, meta, state) do
+  def handle_action(_pid, _payload, _meta, _state) do
     %{"error" => "No Action Handler"}
   end
 end

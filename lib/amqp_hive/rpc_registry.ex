@@ -34,7 +34,6 @@ defmodule AmqpHive.RpcRegistry do
   end
 
   def init(_) do
-    Process.send_after(self(), :log_state, 25000)
     Process.flag(:trap_exit, true)
     {:ok, %{}}
   end
@@ -61,7 +60,7 @@ defmodule AmqpHive.RpcRegistry do
     total = Swarm.registered() |> Enum.count()
     local = state |>  Enum.count()
 
-    Logger.info("[Task Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
+    Logger.debug("[Task Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
     Process.send_after(self(), :log_state, 15000)
     {:noreply, state}
   end
@@ -69,14 +68,23 @@ defmodule AmqpHive.RpcRegistry do
   def handle_info({:DOWN, ref, :process, _pid, :normal}, state) do
     # Logger.debug("[Registry] DOWN NORMAL #{inspect(Map.get(state, ref))}")
     case Map.get(state, ref) do
-      {name, task_args} ->
+      {name, _task_args} ->
         Swarm.unregister_name(name)
-      other -> nil
+      _other -> nil
     end
     {:noreply, Map.delete(state, ref)}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, _pid, :shutdown}, state) do
+    case Map.get(state, ref) do
+      {name, _task_args} ->
+        Swarm.unregister_name(name)
+      _other -> nil
+    end
+    {:noreply, Map.delete(state, ref)}
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
     # Logger.debug("[Registry] DOWN #{reason} #{inspect(Map.get(state, ref))}")
     case Map.get(state, ref) do
       nil ->
@@ -91,7 +99,7 @@ defmodule AmqpHive.RpcRegistry do
     end
   end
 
-  def start_consumer_via_swarm(name, task_args, reason \\ "starting") do
+  def start_consumer_via_swarm(name, task_args, _reason \\ "starting") do
     with :undefined <- Swarm.whereis_name(name),
          {:ok, pid} <- Swarm.register_name(name, AmqpHiveClient.Rpc, :register_task, [name, task_args]) do
           Swarm.join(@swarm_group, pid)

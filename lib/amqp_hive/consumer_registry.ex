@@ -34,7 +34,6 @@ defmodule AmqpHive.ConsumerRegistry do
   end
 
   def init(_) do
-    Process.send_after(self(), :log_state, 25000)
     Process.send_after(self(), :handle_startup, 10000)
     Process.flag(:trap_exit, true)
     {:ok, %{}}
@@ -72,22 +71,21 @@ defmodule AmqpHive.ConsumerRegistry do
     total = Swarm.registered() |> Enum.count()
     local = state |>  Enum.count()
 
-    Logger.info("[Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
-    Process.send_after(self(), :log_state, 15000)
+    Logger.debug("[Registry] Totals: #{inspect(get_swarm_state())}  Swarm/#{total} Local/#{local}")
     {:noreply, state}
   end
 
   def handle_info({:DOWN, ref, :process, _pid, :normal}, state) do
     # Logger.debug("[Registry] DOWN NORMAL #{inspect(Map.get(state, ref))}")
     case Map.get(state, ref) do
-      {name, consumer, conn_name} ->
+      {name, _consumer, _conn_name} ->
         Swarm.unregister_name(name)
-      other -> nil
+      _other -> nil
     end
     {:noreply, Map.delete(state, ref)}
   end
 
-  def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, state) do
     # Logger.debug("[Registry] DOWN #{reason} #{inspect(Map.get(state, ref))}")
     case Map.get(state, ref) do
       nil ->
@@ -102,7 +100,7 @@ defmodule AmqpHive.ConsumerRegistry do
     end
   end
 
-  def start_consumer_via_swarm(name, consumer, connection_name, reason \\ "starting") do
+  def start_consumer_via_swarm(name, consumer, connection_name, _reason \\ "starting") do
     with :undefined <- Swarm.whereis_name(name),
          {:ok, pid} <- Swarm.register_name(name, AmqpHiveClient.ConnectionManager, :register_consumer, [name, consumer, connection_name]) do
           Swarm.join(@swarm_group, pid)

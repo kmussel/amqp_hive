@@ -37,7 +37,7 @@ defmodule AmqpHiveClient.Consumer do
   # **NOTE**: This is called *after* the process is successfully started,
   # so make sure to design your processes around this caveat if you
   # wish to hand off state like this.
-  def handle_cast({:swarm, :end_handoff, delay}, state) do
+  def handle_cast({:swarm, :end_handoff, _delay}, state) do
     Logger.info("[SWARM] END HANDoff #{inspect(state)}")
     {:noreply, state}
   end
@@ -51,7 +51,7 @@ defmodule AmqpHiveClient.Consumer do
     {:noreply, state}
   end
 
-  def handle_cast({:channel_available, chan}, {consumer, channel, attrs} = state) do
+  def handle_cast({:channel_available, chan}, {consumer, _channel, attrs} = _state) do
     Process.monitor(chan.pid)
 
     queue = Map.get(consumer, :queue, "")
@@ -59,7 +59,7 @@ defmodule AmqpHiveClient.Consumer do
     prefetch_count = Map.get(consumer, :prefetch_count, 10)
 
     Basic.qos(chan, prefetch_count: prefetch_count)
-    res = AMQP.Queue.declare(chan, queue, queue_options)
+    AMQP.Queue.declare(chan, queue, queue_options)
     {:ok, consumer_tag} = Basic.consume(chan, queue)
     newattrs = Map.put(attrs, :consumer_tag, consumer_tag)
     {:noreply, {consumer, chan, newattrs}}
@@ -67,7 +67,7 @@ defmodule AmqpHiveClient.Consumer do
 
   def handle_cast(
         {:stop, reason},
-        {consumer, _chan, %{parent: connection_name} = options} = state
+        {_consumer, _chan, %{parent: _connection_name} = _options} = state
       ) do
     Logger.debug(fn -> "Handle Stop Consumer CAST: #{inspect(reason)}" end)
     # consumer_name = Map.get(consumer, :name)
@@ -81,7 +81,7 @@ defmodule AmqpHiveClient.Consumer do
     {:noreply, state}
   end
 
-  def handle_cast(:finished, {consumer, channel, %{consumer_tag: tag}} = state) do
+  def handle_cast(:finished, {consumer, channel, %{consumer_tag: _tag}} = state) do
     # Logger.debug(fn -> "[CONSUMER] HANDLE Cast Finished Queue = #{inspect(state)}" end)
     case channel do
       nil -> 
@@ -117,9 +117,9 @@ defmodule AmqpHiveClient.Consumer do
     {:stop, :shutdown, state}
   end
   
-  def handle_info(:ensure_channel, {consumer, channel, %{parent: connection_name}} = state) do
+  def handle_info(:ensure_channel, {_consumer, channel, %{parent: connection_name}} = state) do
     if is_nil(channel) do
-      res = AmqpHiveClient.Connection.request_channel(connection_name, self())
+      AmqpHiveClient.Connection.request_channel(connection_name, self())
       # Process.send_after(self(), :ensure_channel, 5_000)
     end
     {:noreply, state}
@@ -127,27 +127,27 @@ defmodule AmqpHiveClient.Consumer do
 
 
   # Confirmation sent by the broker after registering this process as a consumer
-  def handle_info({:basic_consume_ok, %{consumer_tag: consumer_tag}}, {consumer, chan, attrs} = state) do
+  def handle_info({:basic_consume_ok, %{consumer_tag: consumer_tag}}, {consumer, chan, attrs} = _state) do
     # Logger.debug(fn -> "[CONSUMER] basic consume #{inspect(consumer_tag)}" end)
     newattrs = Map.put(attrs, :consumer_tag, consumer_tag)
     {:noreply, {consumer, chan, newattrs}}
   end
 
   # Sent by the broker when the consumer is unexpectedly cancelled (such as after a queue deletion)
-  def handle_info({:basic_cancel, %{consumer_tag: consumer_tag}}, {consumer, chan, attrs} = state) do
+  def handle_info({:basic_cancel, %{consumer_tag: _consumer_tag}}, {_consumer, _chan, _attrs} = state) do
     # Logger.debug(fn -> "[CONSUMER] basic cancel #{inspect(consumer_tag)}" end)
 
     {:stop, :normal, state}
   end
 
   # Confirmation sent by the broker to the consumer process after a Basic.cancel
-  def handle_info({:basic_cancel_ok, %{consumer_tag: consumer_tag}}, {consumer, chan, attrs} = state) do
+  def handle_info({:basic_cancel_ok, %{consumer_tag: _consumer_tag}}, {_consumer, _chan, _attrs} = state) do
     # Logger.debug(fn -> "[CONSUMER] basic cancel_ok #{inspect(consumer_tag)}" end)
     {:stop, :normal, state}
   end
 
   # Receives and processes message from queue
-  def handle_info({:basic_deliver, payload, meta}, {consumer, chan, other} = state) do
+  def handle_info({:basic_deliver, payload, meta}, {_consumer, chan, _other} = state) do
     pid = self()
     Logger.info(fn -> "Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
 
@@ -161,7 +161,7 @@ defmodule AmqpHiveClient.Consumer do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, _, :process, _pid, reason}, state) do
+  def handle_info({:DOWN, _, :process, _pid, _reason}, state) do
     # Logger.debug(fn -> "Consumer Down, reason: #{inspect(reason)} state = #{inspect(state)}" end)
     {:noreply, state}
   end
@@ -185,13 +185,13 @@ defmodule AmqpHiveClient.Consumer do
     {:noreply, state}
   end
 
-  def handle_info(:kill_channel, {_, channel, _} = state) do
+  def handle_info(:kill_channel, {_, _channel, _} = state) do
     Logger.debug(fn -> "HANDLE kill channel state = #{inspect(state)}" end)
     # AMQP.Channel.close(channel)
     {:noreply, state}
   end
 
-  def handle_info(:finished, {consumer, channel, attrs} = state) do
+  def handle_info(:finished, {consumer, channel, _attrs} = state) do
     # Logger.debug(fn -> "HANDLE Finished Queue = #{inspect(state)}" end)
     case channel do
       nil -> 
@@ -214,7 +214,7 @@ defmodule AmqpHiveClient.Consumer do
   end
 
 
-  def terminate(other, {_consumer, channel, _options} = state) do
+  def terminate(other, {_consumer, _channel, _options} = state) do
     Logger.debug(fn -> "[CONSUMER TERMINATE] other = #{inspect(other)} and stuff = #{inspect(state)}" end)
     :shutdown
   end
@@ -224,20 +224,18 @@ defmodule AmqpHiveClient.Consumer do
   end
 
 
-  def handle_action(pid, %{"action" => "finished"} = payload, meta, state) do    
+  def handle_action(pid, %{"action" => "finished"} = _payload, _meta, _state) do    
     # Logger.info("Handle finish action #{inspect(pid)}")
     GenServer.cast(pid, :finished)
     %{"success" => "Finished"}
   end
 
-  def handle_action(pid, %{"action" => "log", "msg" => msg} = payload, meta, state) do    
-    # Logger.info("Handle LOG action #{inspect(msg)}")
-    # GenServer.cast(pid, :finished)
-    GenServer.cast(AmqpHive.LoadTest, :message_received)
+  def handle_action(_pid, %{"action" => "log", "msg" => _msg} = _payload, _meta, _state) do    
+    # Logger.info("Handle LOG action #{inspect(msg)}")    
     %{"success" => "Logged"}
   end
 
-  def handle_action(pid, payload, meta, state) do
+  def handle_action(_pid, _payload, _meta, _state) do
     %{"error" => "No Action Handler"}
   end
 end

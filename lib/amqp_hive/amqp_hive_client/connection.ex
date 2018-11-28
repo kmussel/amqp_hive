@@ -33,7 +33,7 @@ defmodule AmqpHiveClient.Connection do
         {:ok, state}
 
       {:error, reason} ->
-        {:error, "Could Not start connection"}
+        {:error, "Could Not start connection #{inspect(reason)}"}
     end
   end
 
@@ -88,11 +88,11 @@ defmodule AmqpHiveClient.Connection do
                 # ]
               ]
 
-    connection_url =
-      "amqp://#{username}:#{password}@#{host}:#{port}/#{virtual_host}?heartbeat_interval=20&retry_delay=10&connection_attempts=20"
+    # connection_url =
+    #   "amqp://#{username}:#{password}@#{host}:#{port}/#{virtual_host}?heartbeat_interval=20&retry_delay=10&connection_attempts=20"
+    # connect_params = Enum.map(connection, fn {key, value} -> {:"#{key}", value} end)
 
-    connect_params = Enum.map(connection, fn {key, value} -> {:"#{key}", value} end)
-    Logger.info(fn -> "AMQP connect params: #{inspect(conn_options)}" end)
+    # Logger.info(fn -> "AMQP connect params: #{inspect(conn_options)}" end)
 
     # case AMQP.Connection.open(connection_url) do
     case AMQP.Connection.open(conn_options) do
@@ -139,8 +139,8 @@ defmodule AmqpHiveClient.Connection do
 
   def handle_call(
         {:consumer_remove, consumer},
-        from,
-        {properties, conn, channel_mappings} = state
+        _from,
+        {properties, conn, channel_mappings} = _state
       ) do
     # Logger.debug(fn -> "HANDLE CALL: remove consumer #{inspect(channel_mappings)}" end)
     channel = Map.get(channel_mappings, consumer)
@@ -149,7 +149,7 @@ defmodule AmqpHiveClient.Connection do
     {:reply, :ok, {properties, conn, new_mapping}}
   end
 
-  def handle_cast({:chan_request, consumer}, {properties, conn, channel_mappings} = state) do
+  def handle_cast({:chan_request, consumer}, {properties, conn, channel_mappings} = _state) do
     # Logger.debug(fn -> "HANDLE CAST: channel request #{inspect(state)}" end)
     new_mapping = store_channel_mapping(conn, consumer, channel_mappings)
 
@@ -164,16 +164,16 @@ defmodule AmqpHiveClient.Connection do
     {:noreply, {properties, conn, new_mapping}}
   end
 
-  def handle_cast(other, state) do
+  def handle_cast(_other, state) do
     {:noreply, state}
   end
 
-  def handle_info({:create_channel, consumer}, {properties, conn, channel_mappings} = state) do
+  def handle_info({:create_channel, consumer}, {_properties, _conn, _channel_mappings} = state) do
     GenServer.cast(self(), {:chan_request, consumer})
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, ref, :process, pid, reason}, {properties, conn, channel_mappings} = state) do
+  def handle_info({:DOWN, _ref, :process, pid, _reason}, {properties, conn, channel_mappings} = _state) do
     # Logger.debug("[CONNECTION] DOWN #{inspect(reason)}")
     channel = Map.get(channel_mappings, pid)
     close_channel(channel)
@@ -181,7 +181,7 @@ defmodule AmqpHiveClient.Connection do
     {:noreply, {properties, conn, new_mapping}}
   end
 
-  def handle_info(reason, state) do
+  def handle_info(_reason, state) do
     {:noreply, state}
   end
 
@@ -199,7 +199,7 @@ defmodule AmqpHiveClient.Connection do
       Channel.close(channel)
     end
   rescue
-    exception ->
+    _exception ->
       Logger.info(fn -> "Could not close channel" end)
   end
 

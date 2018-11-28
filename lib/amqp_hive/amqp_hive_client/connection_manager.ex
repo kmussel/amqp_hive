@@ -24,7 +24,7 @@ defmodule AmqpHiveClient.ConnectionManager do
   end
 
   def start_connections_and_consumers(connections) do
-    Enum.reduce(connections, [], fn conn, kids ->
+    Enum.each(connections, fn conn ->
       GenServer.cast(self(), {:start_connection, conn})
     end)
   end
@@ -62,22 +62,21 @@ defmodule AmqpHiveClient.ConnectionManager do
     end)
   end
 
-  defp event(delay) do
-    me = self()
-
-    # %Timer.Event{
-    #   id: "start_connections",
-    #   handler: fn -> GenServer.cast(me, :start_connections) end,
-    #   interval: delay
-    # }
-  end
+  # defp event(delay) do
+  #   me = self()
+  #   %Timer.Event{
+  #     id: "start_connections",
+  #     handler: fn -> GenServer.cast(me, :start_connections) end,
+  #     interval: delay
+  #   }
+  # end
 
   def register_consumer(name, consumer, conn_name) do
     # Logger.info("Register New Consumer #{name}")
     # Process.whereis(AmqpHiveClient.ConnectionSupervisor) 
     # GenServer.cast(AmqpHiveClient.ConnectionManager, {:register_consumer, {name, consumer, conn_name}})
     # handle_call
-    with {:ok, pid} = GenServer.call(__MODULE__, {:start_connection_name, conn_name}) do
+    with {:ok, _conpid} <- GenServer.call(__MODULE__, {:start_connection_name, conn_name}) do
       {:ok, pid} = AmqpHiveClient.ConsumerSupervisor.start_consumer(consumer, conn_name)
       # Logger.info("The start consumer res = #{inspect(pid)}")
       AmqpHive.ConsumerRegistry.monitor(pid, {name, consumer, conn_name})
@@ -85,7 +84,6 @@ defmodule AmqpHiveClient.ConnectionManager do
     else
       err ->  {:error, err}
     end
-    # {:ok, _pid} = start_link(name)
   end
   
 
@@ -110,7 +108,7 @@ defmodule AmqpHiveClient.ConnectionManager do
   end
 
 
-  def handle_cast(:setup_connections, {connections, registry, refs} = state) do
+  def handle_cast(:setup_connections, {connections, registry, refs} = _state) do
     Logger.info(fn -> "Setup Connections #{inspect(connections)}" end)
 
     new_connections =
@@ -142,11 +140,11 @@ defmodule AmqpHiveClient.ConnectionManager do
 
   def handle_info(:start_connections, {connections, _registry, _refs} = state) do
     start_connections_and_consumers(connections)
-    ref = Process.send_after(self(), :start_connections, @time + :rand.uniform(1000))
+    Process.send_after(self(), :start_connections, @time + :rand.uniform(1000))
     {:noreply, state}
   end
 
-  def handle_cast({:add_connection, conn}, {connections, registry, refs} = state) do
+  def handle_cast({:add_connection, conn}, {connections, registry, refs} = _state) do
     Logger.info(fn -> "Adding New Connection #{inspect(conn)}" end)
     newconnections = connections ++ [conn]
     {:noreply, {newconnections, registry, refs}}
@@ -167,9 +165,9 @@ defmodule AmqpHiveClient.ConnectionManager do
 
   def handle_cast({:start_connection, %{name: _name} = conn}, {_, _, _} = state) do
     case start_connection(conn, state) do
-      {:ok, pid, newstate} -> 
+      {:ok, _pid, newstate} -> 
         {:noreply, newstate}
-      {:error, other, newstate} -> 
+      {:error, _other, newstate} -> 
         {:noreply, newstate}
     end
   end
@@ -233,7 +231,7 @@ defmodule AmqpHiveClient.ConnectionManager do
 
   def handle_cast(
         {:remove_consumer, consumer_name, connection_name},
-        {connections, registry, refs} = state
+        {connections, registry, refs} = _state
       ) do
     Logger.info(fn -> "Connection List Remove Consumer: = #{inspect(consumer_name)}" end)
 
@@ -262,9 +260,9 @@ defmodule AmqpHiveClient.ConnectionManager do
     {:noreply, {newconnections, registry, refs}}
   end
 
-  def handle_cast(other, state), do: {:noreply, state}
+  def handle_cast(_other, state), do: {:noreply, state}
 
-  def handle_info({:DOWN, ref, :process, _pid, _reason}, {connections, names, refs} = state) do
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, {connections, names, refs} = _state) do
     {name, refs} = Map.pop(refs, ref)
     Logger.info(fn -> "[ConnectionManager] Process Down: name = #{inspect(name)}" end)
     names = Map.delete(names, name)
