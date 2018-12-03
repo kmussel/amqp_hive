@@ -45,12 +45,12 @@ defmodule AmqpHiveClient.Connection do
   end
 
   defp establish_new_connection(conn) do
-    connection = Map.get(conn, :connection, %{})
-    host = Map.get(connection, :host, "")
-    virtual_host = Map.get(connection, :virtual_host, "")    
-    port = Map.get(connection, :port, 5672)
-    username = Map.get(connection, :username, "")
-    password = Map.get(connection, :password, "")
+    connection =   Map.get(conn, :connection, %{})
+    host =         Map.get(connection, :host, "")
+    virtual_host = get_virtual_host(Map.get(connection, :virtual_host))
+    port =         get_port(Map.get(connection, :port, 5672))
+    username =     Map.get(connection, :username, "")
+    password =     Map.get(connection, :password, "")
 
     # def open(options) when is_list(options) do
     #   options = options
@@ -82,12 +82,11 @@ defmodule AmqpHiveClient.Connection do
                 heartbeat: 20,
                 heartbeat_interval: 20,
                 channel_max: 10000
+              ]
                 # client_properties: [
                 #   connection_attempts: 20
                 #   retry_delay: 10
                 # ]
-              ]
-
     # connection_url =
     #   "amqp://#{username}:#{password}@#{host}:#{port}/#{virtual_host}?heartbeat_interval=20&retry_delay=10&connection_attempts=20"
     # connect_params = Enum.map(connection, fn {key, value} -> {:"#{key}", value} end)
@@ -213,4 +212,11 @@ defmodule AmqpHiveClient.Connection do
         nil
     end
   end
+
+  defp get_port(""), do: 5672
+  defp get_port(port) when is_binary(port), do: String.to_integer(port)
+  defp get_port(port), do: port
+
+  defp get_virtual_host(""), do: "/"
+  defp get_virtual_host(vhost), do: vhost
 end
