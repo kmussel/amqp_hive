@@ -28,7 +28,7 @@ defmodule AmqpHiveClient.Consumer do
   end
 
   def handle_call(other, _from, state) do
-    Logger.info("[CONSUMER HANDLE CALL] #{inspect(other)}")
+    Logger.debug("[CONSUMER HANDLE CALL] #{inspect(other)}")
     {:reply, :ok, state}
   end
   # called after the process has been restarted on its new node,
@@ -38,7 +38,7 @@ defmodule AmqpHiveClient.Consumer do
   # so make sure to design your processes around this caveat if you
   # wish to hand off state like this.
   def handle_cast({:swarm, :end_handoff, _delay}, state) do
-    Logger.info("[SWARM] END HANDoff #{inspect(state)}")
+    Logger.debug("[SWARM] END HANDoff #{inspect(state)}")
     {:noreply, state}
   end
   # called when a network split is healed and the local process
@@ -47,7 +47,7 @@ defmodule AmqpHiveClient.Consumer do
   # to ignore the handoff state, or apply your own conflict resolution
   # strategy
   def handle_cast({:swarm, :resolve_conflict, _delay}, state) do
-    Logger.info("[SWARM] Resolve conflicts #{inspect(state)}")
+    Logger.debug("[SWARM] Resolve conflicts #{inspect(state)}")
     {:noreply, state}
   end
 
@@ -149,7 +149,7 @@ defmodule AmqpHiveClient.Consumer do
   # Receives and processes message from queue
   def handle_info({:basic_deliver, payload, meta}, {_consumer, chan, _other} = state) do
     pid = self()
-    Logger.info(fn -> "Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
+    Logger.debug(fn -> "Basic deliver in #{inspect(pid)} #{inspect(payload)}" end)
 
     module =
       case Application.get_env(:amqp_hive, :consumer_handler) do

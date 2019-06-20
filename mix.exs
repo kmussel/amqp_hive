@@ -7,7 +7,7 @@ defmodule AmqpHive.MixProject do
     [
       app: :amqp_hive,
       version: @version,
-      elixir: "~> 1.6",
+      elixir: "~> 1.7",
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -37,7 +37,7 @@ defmodule AmqpHive.MixProject do
       {:swarm, "~> 3.0"},
       {:poison, "~> 3.1.0"},
       {:httpoison, "~> 1.0"},
-      {:amqp, git: "https://github.com/kmussel/amqp.git", tag: "v1.0.4"},
+      {:amqp, "~> 1.2"},
       {:elixir_uuid, "~> 1.2.0"}
     ]
   end
